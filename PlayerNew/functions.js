@@ -12,85 +12,81 @@ const audio = document.getElementById("audio");
 const currentTimeEl = document.getElementById("current-time");
 const totalTimeEl = document.getElementById("total-time");
 
-const songs = [
-    "I'll See You There Tomorrow.mp3",
-    "New Jeans.mp3",
-    "Tinnitus.mp3"
-];
+const jsmediatags = require("jsmediatags");
+const fs = require("fs");
+
+const songs = fs.readdirSync("./music").filter(f => f.endsWith(".mp3"));
 
 let currentSong = 0;
-let interval = null;
-let frame = 1;
+let cdInterval = null;
+let cdState = false;
 
-function formatTime(time) {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
+function toggleUI(isPlaying) {
+    playBtn.style.display = isPlaying ? "none" : "block";
+    pauseBtn.style.display = isPlaying ? "block" : "none";
 
-    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+    playerBGPlay.style.display = isPlaying ? "none" : "block";
+    playerBGPause.style.display = isPlaying ? "block" : "none";
 }
 
-function loadSong(index) {
-    const song = songs[index];
+function formatTime(t) {
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
+}
 
+function loadSong(i) {
+    const song = songs[i];
     audio.src = `music/${song}`;
 
-    titleEl.textContent = song.replace(".mp3", "");
-    artistEl.textContent = "Unknown Artist";
+    jsmediatags.read(`music/${song}`, {
+        onSuccess: tag => {
+            titleEl.textContent = tag.tags.title || song.replace(".mp3", "");
+            artistEl.textContent = tag.tags.artist || "Unknown Artist";
+        },
+        onError: () => {
+            titleEl.textContent = song.replace(".mp3", "");
+            artistEl.textContent = "Unknown Artist";
+        }
+    });
 }
 
 function startCD() {
-    clearInterval(interval);
+    clearInterval(cdInterval);
 
-    interval = setInterval(() => {
-        cd.src = frame === 1
-            ? "IconsNew/CD2.png"
-            : "IconsNew/CD1.png";
+    cdInterval = setInterval(() => {
+        cd.src = cdState
+            ? "IconsNew/CD1.png"
+            : "IconsNew/CD2.png";
 
-        frame = frame === 1 ? 2 : 1;
+        cdState = !cdState;
     }, 200);
 }
 
 function stopCD() {
-    clearInterval(interval);
+    clearInterval(cdInterval);
 }
 
-function playMusic() {
+function play() {
     audio.play();
-
-    playBtn.style.display = "none";
-    pauseBtn.style.display = "block";
-    playerBGPlay.style.display = "none";
-    playerBGPause.style.display = "block";
-
+    toggleUI(true);
     startCD();
 }
 
-function pauseMusic() {
+function pause() {
     audio.pause();
-
-    pauseBtn.style.display = "none";
-    playBtn.style.display = "block";
-    playerBGPlay.style.display = "block";
-    playerBGPause.style.display = "none";
-
+    toggleUI(false);
     stopCD();
 }
 
-function changeSong(direction) {
-    currentSong += direction;
-
-    if (currentSong >= songs.length)
-        currentSong = 0;
-
-    if (currentSong < 0)
-        currentSong = songs.length - 1;
-
+function changeSong(dir) {
+    currentSong = (currentSong + dir + songs.length) % songs.length;
     loadSong(currentSong);
-    playMusic();
+    play();
 }
 
-playBtn.onclick = playMusic;
-pauseBtn.onclick = pauseMusic;
+playBtn.onclick = play;
+pauseBtn.onclick = pause;
 
 nextBtn.onclick = () => changeSong(1);
 prevBtn.onclick = () => changeSong(-1);
@@ -101,7 +97,6 @@ audio.addEventListener("loadedmetadata", () => {
 
 audio.addEventListener("timeupdate", () => {
     currentTimeEl.textContent = formatTime(audio.currentTime);
-
     progress.value = (audio.currentTime / audio.duration) * 100;
 });
 
